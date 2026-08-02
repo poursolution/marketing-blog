@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>블로그 포스팅 대시보드</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --bg:#FFFFFF;
+    --surface:#F5F6F7;
+    --surface-2:#FFFFFF;
+    --border:#ECEDEF;
+    --text:#1A1D29;
+    --muted:#8B909A;
+    --accent:#03C75A;
+    --accent-dark:#029C46;
+    --accent-light:#E3F9EC;
+    --success:#03C75A;
+    --success-light:#E3F9EC;
+    --warning:#F5A623;
+    --warning-light:#FEF3E0;
+    --danger:#E8534E;
+    --danger-light:#FDEBEA;
+    --radius:20px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,'Malgun Gothic','Apple SD Gothic Neo','Segoe UI',sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    font-size:14px;
+  }
+  .wrap{max-width:1320px;margin:0 auto;padding:28px 24px 60px;}
+  header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;flex-wrap:wrap;gap:12px;}
+  h1{font-size:21px;font-weight:800;margin:0 0 4px;letter-spacing:-0.3px;display:flex;align-items:center;gap:8px;}
+  h1::before{content:"";width:22px;height:22px;border-radius:50%;background:var(--accent);display:inline-block;}
+  .sub{color:var(--muted);font-size:13px;font-weight:500;}
+  .btn{
+    border:none;background:var(--surface);color:var(--text);
+    padding:10px 18px;border-radius:999px;font-size:13px;font-weight:700;cursor:pointer;
+    display:inline-flex;align-items:center;gap:6px;transition:all .15s;
+  }
+  .btn:hover{background:var(--border);}
+  .btn.primary{background:var(--accent);color:#fff;}
+  .btn.primary:hover{background:var(--accent-dark);}
+  .btn.small{padding:6px 14px;font-size:12px;}
+  .btn.ghost{border:none;background:transparent;color:var(--muted);}
+
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px;}
+  .card{background:var(--surface);border-radius:var(--radius);padding:20px;}
+  .card .label{font-size:12px;color:var(--muted);font-weight:600;margin-bottom:10px;}
+  .card .value{font-size:28px;font-weight:800;letter-spacing:-0.5px;color:var(--text);}
+  .card .value small{font-size:13px;font-weight:600;color:var(--muted);}
+  .card .bar-track{height:6px;background:#fff;border-radius:4px;margin-top:12px;overflow:hidden;}
+  .card .bar-fill{height:100%;background:var(--accent);border-radius:4px;transition:width .3s;}
+  .card .bar-fill.ok{background:var(--success);}
+  .card .bar-fill.warn{background:var(--warning);}
+
+  .panels{display:grid;grid-template-columns:1.1fr 1fr;gap:14px;margin-bottom:18px;}
+  .panel{background:var(--surface);border-radius:var(--radius);padding:20px;}
+  .panel h3{margin:0 0 16px;font-size:14px;font-weight:800;display:flex;justify-content:space-between;align-items:center;color:var(--text);}
+  .seg{display:flex;gap:2px;background:#fff;padding:3px;border-radius:999px;}
+  .seg button{border:none;background:transparent;padding:6px 12px;font-size:12px;border-radius:999px;cursor:pointer;color:var(--muted);font-weight:700;}
+  .seg button.active{background:var(--accent);color:#fff;}
+  .chart-box{position:relative;height:230px;}
+
+  .rank-list{list-style:none;margin:0;padding:0;}
+  .rank-row{display:flex;align-items:center;gap:12px;padding:11px 6px;background:var(--surface-2);border-radius:14px;margin-bottom:6px;}
+  .rank-row:last-child{margin-bottom:0;}
+  .rank-badge{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:var(--accent);background:#fff;border:2px solid var(--accent-light);flex-shrink:0;}
+  .rank-badge.r1{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .rank-name{font-weight:700;width:64px;flex-shrink:0;font-size:13px;color:var(--text);}
+  .rank-track{flex:1;height:8px;background:var(--surface);border-radius:6px;overflow:hidden;}
+  .rank-track span{display:block;height:100%;background:var(--accent);border-radius:6px;}
+  .rank-num{font-weight:800;font-size:12.5px;width:78px;text-align:right;flex-shrink:0;color:var(--text);}
+  .rank-sub{font-size:11px;color:var(--muted);font-weight:600;}
+
+  .toolbar{background:var(--surface);border-radius:var(--radius);padding:14px 18px;margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  .toolbar select,.toolbar input[type=date],.toolbar input[type=text]{
+    border:none;border-radius:999px;padding:9px 14px;font-size:13px;color:var(--text);background:#fff;font-weight:500;
+  }
+  .toolbar .grow{flex:1;min-width:160px;}
+
+  table.log{width:100%;border-collapse:collapse;background:var(--surface);border-radius:var(--radius);overflow:hidden;}
+  table.log thead th{background:var(--surface);text-align:left;font-size:12px;color:var(--muted);font-weight:700;padding:16px 16px 10px;}
+  table.log tbody td{padding:14px 16px;border-top:1px solid var(--border);font-size:13px;vertical-align:middle;color:var(--text);}
+  table.log tbody tr:hover{background:var(--accent-light);}
+  .tag{display:inline-block;background:var(--accent-light);color:var(--accent-dark);font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;white-space:nowrap;}
+  .date-cell,.author-cell{white-space:nowrap;}
+  .kw{color:var(--muted);font-size:12px;}
+  a.link{background:var(--accent);color:#fff;text-decoration:none;font-size:11.5px;font-weight:700;padding:6px 14px;border-radius:999px;display:inline-block;white-space:nowrap;}
+  a.link:hover{background:var(--accent-dark);}
+  .del-btn{color:var(--muted);background:var(--surface);border:none;cursor:pointer;font-size:11.5px;font-weight:700;padding:6px 14px;border-radius:999px;white-space:nowrap;}
+  .del-btn:hover{color:var(--danger);background:var(--danger-light);}
+  .empty{text-align:center;padding:40px;color:var(--muted);font-weight:500;}
+
+  .modal-bg{display:none;position:fixed;inset:0;background:rgba(20,22,28,.4);z-index:50;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto;}
+  .modal-bg.show{display:flex;}
+  .modal{background:#fff;border-radius:24px;padding:26px;width:100%;max-width:480px;}
+  .modal h2{margin:0 0 4px;font-size:17px;font-weight:800;}
+  .modal .desc{color:var(--muted);font-size:12px;margin-bottom:18px;font-weight:500;}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px;}
+  .field input,.field select,.field textarea{
+    width:100%;border:none;border-radius:12px;padding:10px 12px;font-size:13px;background:var(--surface);color:var(--text);font-weight:500;
+  }
+  .field textarea{resize:vertical;min-height:50px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;}
+  .chip-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+  .chip{background:var(--accent-light);border:none;border-radius:999px;padding:5px 10px 5px 14px;font-size:12px;font-weight:700;color:var(--accent-dark);display:flex;align-items:center;gap:6px;}
+  .chip button{border:none;background:none;color:var(--accent-dark);cursor:pointer;font-size:13px;line-height:1;font-weight:800;}
+  .status-banner{padding:11px 16px;border-radius:14px;font-size:12.5px;margin-bottom:14px;display:none;font-weight:600;}
+  .status-banner.show{display:block;}
+  .status-banner.warn{background:var(--warning-light);color:#B36B00;}
+  .status-banner.err{background:var(--danger-light);color:var(--danger);}
+  .status-banner.ok{background:var(--success-light);color:var(--accent-dark);}
+  .toggle-row{display:flex;align-items:center;gap:8px;margin-top:10px;}
+  .toggle-row input{width:auto;}
+  @media (max-width:900px){
+    .cards{grid-template-columns:repeat(2,1fr);}
+    .panels{grid-template-columns:1fr;}
+    table.log{display:block;overflow-x:auto;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>블로그 포스팅 대시보드</h1>
+      <div class="sub" id="headerSub">Firebase 연결 대기 중...</div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn" id="openSettings">⚙ 설정</button>
+      <button class="btn primary" id="openAddPost">+ 포스팅 등록</button>
+    </div>
+  </header>
+
+  <div id="statusBanner" class="status-banner"></div>
+
+  <div class="seg" id="mainTabs" style="margin-bottom:16px;display:inline-flex;">
+    <button data-view="dashboard" class="active">전체 대시보드</button>
+    <button data-view="author">작성자별 보기</button>
+  </div>
+
+  <div id="viewDashboard">
+  <div class="cards">
+    <div class="card">
+      <div class="label">이번 주 전체 포스팅</div>
+      <div class="value" id="cardWeekTotal">0<small>건</small></div>
+    </div>
+    <div class="card">
+      <div class="label">이번 달 전체 포스팅</div>
+      <div class="value" id="cardMonthTotal">0<small>건</small></div>
+    </div>
+    <div class="card">
+      <div class="label">주간 목표 달성률</div>
+      <div class="value" id="cardWeekRate">0<small>%</small></div>
+      <div class="bar-track"><div class="bar-fill" id="cardWeekBar" style="width:0%"></div></div>
+    </div>
+    <div class="card">
+      <div class="label">월간 목표 달성률</div>
+      <div class="value" id="cardMonthRate">0<small>%</small></div>
+      <div class="bar-track"><div class="bar-fill" id="cardMonthBar" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <div class="panels">
+    <div class="panel">
+      <h3>
+        브랜드별 포스팅 분포
+        <div class="seg" data-seg="brandPeriod">
+          <button data-val="week">이번 주</button>
+          <button data-val="month" class="active">이번 달</button>
+          <button data-val="all">전체</button>
+        </div>
+      </h3>
+      <div class="chart-box"><canvas id="brandChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <h3>
+        작성자 랭킹
+        <span class="rank-sub" id="authorPeriodLabel">이번 주 기준</span>
+      </h3>
+      <ul class="rank-list" id="authorRankList"></ul>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <select id="fAuthor"><option value="">전체 작성자</option></select>
+    <select id="fBrand"><option value="">전체 브랜드</option></select>
+    <input type="date" id="fStart">
+    <span style="color:var(--muted);font-size:12px;">~</span>
+    <input type="date" id="fEnd">
+    <input type="text" class="grow" id="fKeyword" placeholder="제목/키워드/주제 검색">
+    <button class="btn small" id="resetFilter">초기화</button>
+  </div>
+
+  <table class="log">
+    <thead>
+      <tr>
+        <th style="width:90px;">날짜</th>
+        <th style="width:80px;">작성자</th>
+        <th style="width:90px;">브랜드</th>
+        <th>제목</th>
+        <th style="width:160px;">키워드</th>
+        <th style="width:100px;">주제</th>
+        <th style="width:70px;">링크</th>
+        <th style="width:50px;"></th>
+      </tr>
+    </thead>
+    <tbody id="postRows"></tbody>
+  </table>
+  <div id="emptyState" class="empty" style="display:none;">등록된 포스팅이 없습니다. 우측 상단의 '포스팅 등록'으로 첫 항목을 추가해 보세요.</div>
+  </div>
+
+  <div id="viewAuthor" style="display:none;">
+    <div class="toolbar" style="margin-bottom:14px;flex-wrap:wrap;">
+      <select id="authorSelect"></select>
+      <div class="seg" data-seg="authorSharedPeriod">
+        <button data-val="all">전체</button>
+        <button data-val="day">오늘</button>
+        <button data-val="week" class="active">이번 주</button>
+        <button data-val="month">이번 달</button>
+      </div>
+      <input type="date" id="authorSharedDateStart">
+      <span style="color:var(--muted);font-size:12px;">~</span>
+      <input type="date" id="authorSharedDateEnd">
+      <select id="authorSharedBrandFilter">
+        <option value="">전체 브랜드</option>
+      </select>
+    </div>
+
+    <div class="cards" style="grid-template-columns:repeat(3,1fr);">
+      <div class="card">
+        <div class="label">오늘</div>
+        <div class="value" id="authorDayTotal">0<small>건</small></div>
+      </div>
+      <div class="card">
+        <div class="label">이번 주</div>
+        <div class="value" id="authorWeekTotal">0<small>건</small></div>
+      </div>
+      <div class="card">
+        <div class="label">이번 달</div>
+        <div class="value" id="authorMonthTotal">0<small>건</small></div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-bottom:14px;">
+      <h3>브랜드별 작성 현황</h3>
+      <div class="chart-box" style="height:280px;"><canvas id="authorBrandChart"></canvas></div>
+    </div>
+
+    <div class="panels" style="margin-bottom:14px;grid-template-columns:repeat(3,1fr);">
+      <div class="panel">
+        <h3>주제별 작성 현황</h3>
+        <ul class="rank-list" id="authorTopicList"></ul>
+      </div>
+      <div class="panel">
+        <h3>공종별 작성 현황</h3>
+        <ul class="rank-list" id="authorWorktypeList"></ul>
+      </div>
+      <div class="panel">
+        <h3>자주 쓰는 키워드</h3>
+        <ul class="rank-list" id="authorKeywordList"></ul>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>포스팅 목록</h3>
+      <table class="log">
+        <thead>
+          <tr>
+            <th style="width:90px;">날짜</th>
+            <th style="width:90px;">브랜드</th>
+            <th>제목</th>
+            <th style="width:160px;">키워드</th>
+            <th style="width:100px;">주제</th>
+            <th style="width:70px;">링크</th>
+          </tr>
+        </thead>
+        <tbody id="authorPostRows"></tbody>
+      </table>
+      <div id="authorEmptyState" class="empty" style="display:none;">이 작성자가 등록한 포스팅이 없습니다.</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- 포스팅 등록/수정 모달 -->
+<div class="modal-bg" id="postModalBg">
+  <div class="modal">
+    <h2 id="postModalTitle">포스팅 등록</h2>
+    <div class="desc">발행 완료된 포스팅 정보를 입력하세요.</div>
+    <div class="field">
+      <label>제목</label>
+      <input type="text" id="pTitle" placeholder="예: 아파트 하자보수, 어디까지 가능할까?">
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>작성자</label>
+        <select id="pAuthor"></select>
+      </div>
+      <div class="field">
+        <label>브랜드</label>
+        <select id="pBrand"></select>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>주제</label>
+        <input type="text" id="pTopic" placeholder="예: 시공사례, 제품소개">
+      </div>
+      <div class="field">
+        <label>발행일</label>
+        <input type="date" id="pDate">
+      </div>
+    </div>
+    <div class="field">
+      <label>공종 (시공사례인 경우, 콤마로 구분)</label>
+      <input type="text" id="pWorktype" placeholder="예: 방수공사, 타일공사">
+    </div>
+    <div class="field">
+      <label>키워드 (콤마로 구분)</label>
+      <input type="text" id="pKeyword" placeholder="예: 아파트누수, 하자보수">
+    </div>
+    <div class="field">
+      <label>링크</label>
+      <input type="text" id="pLink" placeholder="https://...">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="cancelPost">취소</button>
+      <button class="btn primary" id="savePost">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 설정 모달 -->
+<div class="modal-bg" id="settingsModalBg">
+  <div class="modal" style="max-width:520px;">
+    <h2>설정</h2>
+    <div class="desc">작성자·브랜드 목록과 목표 포스팅 수를 관리합니다. (전체 팀 공통 값)</div>
+
+    <div class="field">
+      <label>작성자 목록</label>
+      <div style="display:flex;gap:6px;">
+        <input type="text" id="newAuthorInput" placeholder="작성자 이름 입력 후 추가">
+        <button class="btn small" id="addAuthorBtn">추가</button>
+      </div>
+      <div class="chip-list" id="authorChips"></div>
+    </div>
+
+    <div class="field">
+      <label>브랜드 목록</label>
+      <div style="display:flex;gap:6px;">
+        <input type="text" id="newBrandInput" placeholder="브랜드 이름 입력 후 추가">
+        <button class="btn small" id="addBrandBtn">추가</button>
+      </div>
+      <div class="chip-list" id="brandChips"></div>
+    </div>
+
+    <div class="row2">
+      <div class="field">
+        <label>주간 목표 (1인당, 건)</label>
+        <input type="number" id="weeklyTargetInput" min="0">
+      </div>
+      <div class="field">
+        <label>월간 목표 (1인당, 건)</label>
+        <input type="number" id="monthlyTargetInput" min="0">
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn" id="closeSettings">닫기</button>
+      <button class="btn primary" id="saveSettings">저장</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   1) FIREBASE 설정
+   Firebase 콘솔(console.firebase.google.com) → 프로젝트 생성 →
+   Firestore Database 사용 설정(테스트 모드) → 웹 앱 추가 후
+   나오는 config 값을 아래에 붙여넣으세요.
+   ============================================================ */
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+
+let db = null;
+let firebaseReady = false;
+
+function showStatus(msg, type){
+  const el = document.getElementById('statusBanner');
+  el.textContent = msg;
+  el.className = 'status-banner show ' + (type||'warn');
+}
+
+try{
+  if(firebaseConfig.apiKey === "YOUR_API_KEY"){
+    showStatus('🧪 데모 모드로 실행 중입니다. 지금 등록/삭제하는 데이터는 이 브라우저 창을 새로고침하면 사라집니다. 실제 데이터를 계속 쌓으려면 코드 상단의 firebaseConfig를 교체하세요.', 'warn');
+    document.getElementById('headerSub').textContent = '데모 모드 (임시 저장) · Firebase 미연결';
+  } else {
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    firebaseReady = true;
+    document.getElementById('headerSub').textContent = 'Firebase 연결됨 · 실시간 동기화 중';
+  }
+}catch(e){
+  showStatus('Firebase 초기화 오류: ' + e.message, 'err');
+}
+
+/* ============================================================
+   2) 상태
+   ============================================================ */
+let SETTINGS = { authors: [], brands: [], brandColors: {}, weeklyTarget: 3, monthlyTarget: 12 };
+let POSTS = [];
+let editingId = null;
+let brandChart = null;
+let brandPeriod = 'month';
+let authorBrandChartInst = null;
+let authorSharedPeriod = 'week';
+
+const DEFAULT_BRAND_PALETTE = ['#03C75A','#3B82F6','#F59E0B','#EF4444','#8B5CF6','#14B8A6','#EC4899','#6366F1'];
+
+function getBrandColor(brand){
+  if(SETTINGS.brandColors && SETTINGS.brandColors[brand]) return SETTINGS.brandColors[brand];
+  const idx = SETTINGS.brands.indexOf(brand);
+  return DEFAULT_BRAND_PALETTE[idx >= 0 ? idx % DEFAULT_BRAND_PALETTE.length : 0];
+}
+
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function daysAgoStr(n){ const d=new Date(); d.setDate(d.getDate()-n); return d.toISOString().slice(0,10); }
+
+const DEMO_SETTINGS = {
+  authors: ['작성자1','작성자2','작성자3','작성자4','작성자5'],
+  brands: ['브랜드1','브랜드2','브랜드3','브랜드4','브랜드5'],
+  brandColors: {},
+  weeklyTarget: 2,
+  monthlyTarget: 8
+};
+
+function makeDemoPosts(){
+  const a = DEMO_SETTINGS.authors, b = DEMO_SETTINGS.brands;
+  return [
+    {id:'d1', author:a[0], brand:b[0], title:'(예시) 여름철 하자보수 체크리스트', keyword:'하자보수,여름철점검', topic:'시공사례', worktype:'방수공사', link:'https://example.com/1', publishedAt: daysAgoStr(1)},
+    {id:'d2', author:a[1], brand:b[1], title:'(예시) 입주 전 필수 체크포인트 5가지', keyword:'입주체크,신축아파트', topic:'가이드', link:'https://example.com/2', publishedAt: daysAgoStr(2)},
+    {id:'d3', author:a[2], brand:b[2], title:'(예시) 신제품 라인업 소개', keyword:'신제품,라인업', topic:'제품소개', link:'', publishedAt: daysAgoStr(3)},
+    {id:'d4', author:a[0], brand:b[3], title:'(예시) 이달의 인테리어 트렌드', keyword:'인테리어트렌드', topic:'트렌드', link:'', publishedAt: daysAgoStr(6)},
+    {id:'d5', author:a[3], brand:b[4], title:'(예시) 고객 후기 모음', keyword:'고객후기,사용기', topic:'후기', link:'', publishedAt: daysAgoStr(9)},
+    {id:'d6', author:a[4], brand:b[0], title:'(예시) 자주 묻는 질문 정리', keyword:'FAQ', topic:'가이드', link:'', publishedAt: daysAgoStr(15)},
+    {id:'d7', author:a[1], brand:b[2], title:'(예시) 브랜드 스토리', keyword:'브랜드스토리', topic:'브랜딩', link:'', publishedAt: daysAgoStr(20)}
+  ];
+}
+
+/* ============================================================
+   3) Firestore 로드/저장
+   ============================================================ */
+function loadSettings(){
+  if(!firebaseReady){
+    SETTINGS = JSON.parse(JSON.stringify(DEMO_SETTINGS));
+    renderFilterOptions();
+    renderSettingsModal();
+    renderAll();
+    return;
+  }
+  db.collection('config').doc('settings').onSnapshot(doc=>{
+    if(doc.exists){
+      SETTINGS = Object.assign({authors:[],brands:[],brandColors:{},weeklyTarget:3,monthlyTarget:12}, doc.data());
+    }
+    renderFilterOptions();
+    renderSettingsModal();
+    renderAll();
+  }, err=>showStatus('설정 로드 오류: '+err.message,'err'));
+}
+
+function saveSettingsToDb(){
+  if(!firebaseReady){ showStatus('Firebase 미연결 상태에서는 저장할 수 없습니다.', 'err'); return; }
+  db.collection('config').doc('settings').set(SETTINGS)
+    .then(()=>{ showStatus('설정이 저장되었습니다.', 'ok'); setTimeout(()=>document.getElementById('statusBanner').classList.remove('show'),2000); })
+    .catch(err=>showStatus('저장 오류: '+err.message,'err'));
+}
+
+function loadPosts(){
+  if(!firebaseReady){ POSTS = makeDemoPosts(); renderAll(); return; }
+  db.collection('posts').orderBy('publishedAt','desc').onSnapshot(snap=>{
+    POSTS = snap.docs.map(d=>Object.assign({id:d.id}, d.data()));
+    renderAll();
+  }, err=>showStatus('포스팅 로드 오류: '+err.message,'err'));
+}
+
+/* ============================================================
+   4) 유틸: 기간 계산
+   ============================================================ */
+function startOfWeek(d){
+  const date = new Date(d);
+  const day = date.getDay(); // 0=일
+  const diff = (day===0? -6 : 1-day); // 월요일 시작
+  date.setDate(date.getDate()+diff);
+  date.setHours(0,0,0,0);
+  return date;
+}
+function inRange(dateStr, start, end){
+  const t = new Date(dateStr).getTime();
+  return t >= start.getTime() && t <= end.getTime();
+}
+function getWeekRange(){
+  const now = new Date();
+  const s = startOfWeek(now);
+  const e = new Date(s); e.setDate(e.getDate()+6); e.setHours(23,59,59,999);
+  return [s,e];
+}
+function getMonthRange(){
+  const now = new Date();
+  const s = new Date(now.getFullYear(), now.getMonth(), 1);
+  const e = new Date(now.getFullYear(), now.getMonth()+1, 0, 23,59,59,999);
+  return [s,e];
+}
+function getDayRange(){
+  const now = new Date();
+  const s = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0,0,0,0);
+  const e = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23,59,59,999);
+  return [s,e];
+}
+
+/* ============================================================
+   5) 렌더링
+   ============================================================ */
+function renderFilterOptions(){
+  const fa = document.getElementById('fAuthor');
+  const fb = document.getElementById('fBrand');
+  const pa = document.getElementById('pAuthor');
+  const pb = document.getElementById('pBrand');
+  const asel = document.getElementById('authorSelect');
+  const prevAuthorSel = asel.value;
+  [fa,pa].forEach(sel=>{ if(sel===fa) sel.innerHTML='<option value="">전체 작성자</option>'; else sel.innerHTML=''; });
+  [fb,pb].forEach(sel=>{ if(sel===fb) sel.innerHTML='<option value="">전체 브랜드</option>'; else sel.innerHTML=''; });
+  asel.innerHTML='';
+  SETTINGS.authors.forEach(a=>{
+    fa.insertAdjacentHTML('beforeend', `<option value="${a}">${a}</option>`);
+    pa.insertAdjacentHTML('beforeend', `<option value="${a}">${a}</option>`);
+    asel.insertAdjacentHTML('beforeend', `<option value="${a}">${a}</option>`);
+  });
+  if(SETTINGS.authors.includes(prevAuthorSel)) asel.value = prevAuthorSel;
+  const apbf = document.getElementById('authorSharedBrandFilter');
+  const prevApbf = apbf.value;
+  apbf.innerHTML = '<option value="">전체 브랜드</option>';
+  SETTINGS.brands.forEach(b=>{
+    fb.insertAdjacentHTML('beforeend', `<option value="${b}">${b}</option>`);
+    pb.insertAdjacentHTML('beforeend', `<option value="${b}">${b}</option>`);
+    apbf.insertAdjacentHTML('beforeend', `<option value="${b}">${b}</option>`);
+  });
+  if(SETTINGS.brands.includes(prevApbf)) apbf.value = prevApbf;
+}
+
+function getFilteredPosts(){
+  const author = document.getElementById('fAuthor').value;
+  const brand = document.getElementById('fBrand').value;
+  const start = document.getElementById('fStart').value;
+  const end = document.getElementById('fEnd').value;
+  const kw = document.getElementById('fKeyword').value.trim().toLowerCase();
+  return POSTS.filter(p=>{
+    if(author && p.author!==author) return false;
+    if(brand && p.brand!==brand) return false;
+    if(start && p.publishedAt < start) return false;
+    if(end && p.publishedAt > end) return false;
+    if(kw){
+      const hay = (p.title+' '+p.keyword+' '+p.topic).toLowerCase();
+      if(!hay.includes(kw)) return false;
+    }
+    return true;
+  });
+}
+
+function renderTable(){
+  const rows = getFilteredPosts();
+  const tbody = document.getElementById('postRows');
+  const empty = document.getElementById('emptyState');
+  if(rows.length===0){
+    tbody.innerHTML='';
+    empty.style.display='block';
+    return;
+  }
+  empty.style.display='none';
+  tbody.innerHTML = rows.map(p=>`
+    <tr>
+      <td class="date-cell">${p.publishedAt||'-'}</td>
+      <td class="author-cell">${p.author||'-'}</td>
+      <td><span class="tag" style="background:${getBrandColor(p.brand)};color:#fff;">${p.brand||'-'}</span></td>
+      <td>${p.title||''}</td>
+      <td class="kw">${p.keyword||''}</td>
+      <td>${p.topic||'-'}${p.worktype ? `<br><span class="kw">${p.worktype}</span>` : ''}</td>
+      <td>${p.link ? `<a class="link" href="${p.link}" target="_blank">열기 ↗</a>` : '-'}</td>
+      <td><button class="del-btn" onclick="deletePost('${p.id}')">삭제</button></td>
+    </tr>
+  `).join('');
+}
+
+function renderCards(){
+  const [ws,we] = getWeekRange();
+  const [ms,me] = getMonthRange();
+  const weekPosts = POSTS.filter(p=>p.publishedAt && inRange(p.publishedAt, ws, we));
+  const monthPosts = POSTS.filter(p=>p.publishedAt && inRange(p.publishedAt, ms, me));
+  const authorCount = Math.max(SETTINGS.authors.length, 1);
+
+  document.getElementById('cardWeekTotal').innerHTML = weekPosts.length+'<small>건</small>';
+  document.getElementById('cardMonthTotal').innerHTML = monthPosts.length+'<small>건</small>';
+
+  const weekGoal = (SETTINGS.weeklyTarget||0) * authorCount;
+  const monthGoal = (SETTINGS.monthlyTarget||0) * authorCount;
+  const weekRate = weekGoal>0 ? Math.round(weekPosts.length/weekGoal*100) : 0;
+  const monthRate = monthGoal>0 ? Math.round(monthPosts.length/monthGoal*100) : 0;
+
+  document.getElementById('cardWeekRate').innerHTML = weekRate+'<small>%</small>';
+  document.getElementById('cardMonthRate').innerHTML = monthRate+'<small>%</small>';
+  const wBar = document.getElementById('cardWeekBar');
+  const mBar = document.getElementById('cardMonthBar');
+  wBar.style.width = Math.min(weekRate,100)+'%';
+  mBar.style.width = Math.min(monthRate,100)+'%';
+  wBar.className = 'bar-fill ' + (weekRate>=100?'ok':weekRate>=60?'warn':'');
+  mBar.className = 'bar-fill ' + (monthRate>=100?'ok':monthRate>=60?'warn':'');
+}
+
+function renderAuthorTable(){
+  const [ws,we] = getWeekRange();
+  const [ms,me] = getMonthRange();
+  const list = document.getElementById('authorRankList');
+  if(SETTINGS.authors.length===0){
+    list.innerHTML = `<li style="color:var(--muted);text-align:center;padding:16px;font-weight:600;">설정에서 작성자를 먼저 등록하세요.</li>`;
+    return;
+  }
+  const rows = SETTINGS.authors.map(a=>{
+    const wCount = POSTS.filter(p=>p.author===a && p.publishedAt && inRange(p.publishedAt,ws,we)).length;
+    const mCount = POSTS.filter(p=>p.author===a && p.publishedAt && inRange(p.publishedAt,ms,me)).length;
+    return {author:a, wCount, mCount};
+  }).sort((a,b)=>b.wCount-a.wCount || b.mCount-a.mCount);
+
+  const maxCount = Math.max(1, ...rows.map(r=>r.wCount));
+  list.innerHTML = rows.map((r,i)=>{
+    const rankClass = i===0?'r1':i===1?'r2':i===2?'r3':'';
+    const pct = Math.max(6, r.wCount/maxCount*100);
+    return `<li class="rank-row">
+      <span class="rank-badge ${rankClass}">${i+1}</span>
+      <span class="rank-name">${r.author}</span>
+      <span class="rank-track"><span style="width:${pct}%"></span></span>
+      <span class="rank-num">주 ${r.wCount} · 월 ${r.mCount}</span>
+    </li>`;
+  }).join('');
+}
+
+function renderBrandChart(){
+  let posts = POSTS;
+  if(brandPeriod==='week'){ const [s,e]=getWeekRange(); posts = POSTS.filter(p=>p.publishedAt && inRange(p.publishedAt,s,e)); }
+  if(brandPeriod==='month'){ const [s,e]=getMonthRange(); posts = POSTS.filter(p=>p.publishedAt && inRange(p.publishedAt,s,e)); }
+
+  const labels = SETTINGS.brands.length ? SETTINGS.brands : ['브랜드 미등록'];
+  const data = labels.map(b => posts.filter(p=>p.brand===b).length);
+  const colors = SETTINGS.brands.length ? labels.map(getBrandColor) : ['#D6D9DD'];
+
+  const ctx = document.getElementById('brandChart').getContext('2d');
+  if(brandChart) brandChart.destroy();
+  brandChart = new Chart(ctx, {
+    type:'doughnut',
+    data:{ labels, datasets:[{ data, backgroundColor: colors, borderWidth:2, borderColor:'#fff' }] },
+    options:{
+      maintainAspectRatio:false,
+      plugins:{ legend:{ position:'right', labels:{ boxWidth:10, font:{size:11} } } }
+    }
+  });
+}
+
+function renderSettingsModal(){
+  document.getElementById('weeklyTargetInput').value = SETTINGS.weeklyTarget;
+  document.getElementById('monthlyTargetInput').value = SETTINGS.monthlyTarget;
+  document.getElementById('authorChips').innerHTML = SETTINGS.authors.map(a=>
+    `<span class="chip">${a}<button onclick="removeAuthor('${a}')">×</button></span>`).join('') || '<span style="color:var(--muted);font-size:12px;">등록된 작성자 없음</span>';
+  document.getElementById('brandChips').innerHTML = SETTINGS.brands.map(b=>
+    `<span class="chip">
+      <input type="color" value="${getBrandColor(b)}" oninput="setBrandColor('${b}', this.value)" style="width:16px;height:16px;padding:0;border:none;border-radius:50%;cursor:pointer;background:none;">
+      ${b}<button onclick="removeBrand('${b}')">×</button>
+    </span>`).join('') || '<span style="color:var(--muted);font-size:12px;">등록된 브랜드 없음</span>';
+}
+
+function setBrandColor(brand, color){
+  if(!SETTINGS.brandColors) SETTINGS.brandColors = {};
+  SETTINGS.brandColors[brand] = color;
+  renderAll();
+}
+
+function renderAuthorTopicList(authorPosts){
+  const counts = {};
+  authorPosts.forEach(p=>{ const t=(p.topic||'').trim(); if(t) counts[t]=(counts[t]||0)+1; });
+  const entries = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  const list = document.getElementById('authorTopicList');
+  if(entries.length===0){ list.innerHTML = '<li style="color:var(--muted);text-align:center;padding:16px;font-weight:600;">등록된 주제가 없습니다.</li>'; return; }
+  const max = entries[0][1];
+  list.innerHTML = entries.map(([name,count],i)=>{
+    const pct = Math.max(6, count/max*100);
+    return `<li class="rank-row">
+      <span class="rank-badge ${i===0?'r1':''}">${i+1}</span>
+      <span class="rank-name" style="width:110px;">${name}</span>
+      <span class="rank-track"><span style="width:${pct}%"></span></span>
+      <span class="rank-num">${count}건</span>
+    </li>`;
+  }).join('');
+}
+
+function renderAuthorWorktypeList(authorPosts){
+  const counts = {};
+  authorPosts.forEach(p=>{
+    (p.worktype||'').split(',').map(k=>k.trim()).filter(Boolean).forEach(k=>{
+      counts[k] = (counts[k]||0)+1;
+    });
+  });
+  const entries = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  const list = document.getElementById('authorWorktypeList');
+  if(entries.length===0){ list.innerHTML = '<li style="color:var(--muted);text-align:center;padding:16px;font-weight:600;">등록된 공종이 없습니다.</li>'; return; }
+  const max = entries[0][1];
+  list.innerHTML = entries.map(([name,count],i)=>{
+    const pct = Math.max(6, count/max*100);
+    return `<li class="rank-row">
+      <span class="rank-badge ${i===0?'r1':''}">${i+1}</span>
+      <span class="rank-name" style="width:90px;">${name}</span>
+      <span class="rank-track"><span style="width:${pct}%"></span></span>
+      <span class="rank-num">${count}건</span>
+    </li>`;
+  }).join('');
+}
+
+function renderAuthorKeywordList(authorPosts){
+  const counts = {};
+  authorPosts.forEach(p=>{
+    (p.keyword||'').split(',').map(k=>k.trim()).filter(Boolean).forEach(k=>{
+      counts[k] = (counts[k]||0)+1;
+    });
+  });
+  const entries = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const list = document.getElementById('authorKeywordList');
+  if(entries.length===0){ list.innerHTML = '<li style="color:var(--muted);text-align:center;padding:16px;font-weight:600;">등록된 키워드가 없습니다.</li>'; return; }
+  const max = entries[0][1];
+  list.innerHTML = entries.map(([name,count],i)=>{
+    const pct = Math.max(6, count/max*100);
+    return `<li class="rank-row">
+      <span class="rank-badge ${i===0?'r1':''}">${i+1}</span>
+      <span class="rank-name" style="width:110px;">${name}</span>
+      <span class="rank-track"><span style="width:${pct}%"></span></span>
+      <span class="rank-num">${count}회</span>
+    </li>`;
+  }).join('');
+}
+
+function renderAuthorBrandChart(filteredPosts){
+  const labels = SETTINGS.brands.length ? SETTINGS.brands : ['브랜드 미등록'];
+  const data = labels.map(b=> filteredPosts.filter(p=>p.brand===b).length);
+  const ctx = document.getElementById('authorBrandChart').getContext('2d');
+  if(authorBrandChartInst) authorBrandChartInst.destroy();
+  const maxVal = Math.max(2, ...data);
+  authorBrandChartInst = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels,
+      datasets:[{
+        data,
+        borderColor:'#03C75A',
+        backgroundColor:'rgba(3,199,90,0.15)',
+        fill:true,
+        tension:0.35,
+        borderWidth:2,
+        pointRadius:5,
+        pointBackgroundColor: labels.map(getBrandColor),
+        pointBorderColor:'#fff',
+        pointBorderWidth:2
+      }]
+    },
+    options:{
+      maintainAspectRatio:false,
+      scales:{
+        y:{
+          beginAtZero:true,
+          max: maxVal,
+          ticks:{ stepSize:Math.max(1,Math.ceil(maxVal/4)), font:{size:11}, color:'#8B909A', callback:v=>v+'건' },
+          grid:{ color:'#ECEDEF', drawBorder:false }
+        },
+        x:{
+          ticks:{ font:{size:12,weight:'600'}, color:'#1A1D29' },
+          grid:{ display:false }
+        }
+      },
+      plugins:{ legend:{ display:false } }
+    }
+  });
+}
+
+function renderAll(){
+  renderCards();
+  renderAuthorTable();
+  renderBrandChart();
+  renderTable();
+  renderAuthorView();
+}
+
+function renderAuthorView(){
+  const asel = document.getElementById('authorSelect');
+  if(SETTINGS.authors.length===0){
+    asel.innerHTML = '<option value="">등록된 작성자 없음</option>';
+    document.getElementById('authorDayTotal').innerHTML = '0<small>건</small>';
+    document.getElementById('authorWeekTotal').innerHTML = '0<small>건</small>';
+    document.getElementById('authorMonthTotal').innerHTML = '0<small>건</small>';
+    document.getElementById('authorPostRows').innerHTML = '';
+    document.getElementById('authorTopicList').innerHTML = '';
+    document.getElementById('authorWorktypeList').innerHTML = '';
+    document.getElementById('authorKeywordList').innerHTML = '';
+    document.getElementById('authorEmptyState').style.display = 'block';
+    return;
+  }
+  const author = asel.value || SETTINGS.authors[0];
+  if(!asel.value) asel.value = author;
+
+  const [ds,de] = getDayRange();
+  const [ws,we] = getWeekRange();
+  const [ms,me] = getMonthRange();
+  const authorPosts = POSTS.filter(p=>p.author===author);
+
+  const dayCount = authorPosts.filter(p=>p.publishedAt && inRange(p.publishedAt,ds,de)).length;
+  const weekCount = authorPosts.filter(p=>p.publishedAt && inRange(p.publishedAt,ws,we)).length;
+  const monthCount = authorPosts.filter(p=>p.publishedAt && inRange(p.publishedAt,ms,me)).length;
+  document.getElementById('authorDayTotal').innerHTML = dayCount+'<small>건</small>';
+  document.getElementById('authorWeekTotal').innerHTML = weekCount+'<small>건</small>';
+  document.getElementById('authorMonthTotal').innerHTML = monthCount+'<small>건</small>';
+
+  let sharedFilteredPosts = [...authorPosts];
+  const sharedPeriodVal = authorSharedPeriod;
+  if(sharedPeriodVal==='day') sharedFilteredPosts = sharedFilteredPosts.filter(p=>p.publishedAt && inRange(p.publishedAt,ds,de));
+  else if(sharedPeriodVal==='week') sharedFilteredPosts = sharedFilteredPosts.filter(p=>p.publishedAt && inRange(p.publishedAt,ws,we));
+  else if(sharedPeriodVal==='month') sharedFilteredPosts = sharedFilteredPosts.filter(p=>p.publishedAt && inRange(p.publishedAt,ms,me));
+  const sharedDateStart = document.getElementById('authorSharedDateStart').value;
+  const sharedDateEnd = document.getElementById('authorSharedDateEnd').value;
+  if(sharedDateStart) sharedFilteredPosts = sharedFilteredPosts.filter(p=>p.publishedAt && p.publishedAt >= sharedDateStart);
+  if(sharedDateEnd) sharedFilteredPosts = sharedFilteredPosts.filter(p=>p.publishedAt && p.publishedAt <= sharedDateEnd);
+  const sharedBrandVal = document.getElementById('authorSharedBrandFilter').value;
+  if(sharedBrandVal) sharedFilteredPosts = sharedFilteredPosts.filter(p=>p.brand===sharedBrandVal);
+
+  renderAuthorBrandChart(sharedFilteredPosts);
+  renderAuthorTopicList(sharedFilteredPosts);
+  renderAuthorWorktypeList(sharedFilteredPosts);
+  renderAuthorKeywordList(sharedFilteredPosts);
+
+  const postRows = document.getElementById('authorPostRows');
+  const sortedPosts = [...sharedFilteredPosts].sort((a,b)=> (b.publishedAt||'').localeCompare(a.publishedAt||''));
+  if(sortedPosts.length===0){
+    postRows.innerHTML = '';
+    document.getElementById('authorEmptyState').style.display = 'block';
+  } else {
+    document.getElementById('authorEmptyState').style.display = 'none';
+    postRows.innerHTML = sortedPosts.map(p=>`
+      <tr>
+        <td class="date-cell">${p.publishedAt||'-'}</td>
+        <td><span class="tag" style="background:${getBrandColor(p.brand)};color:#fff;">${p.brand||'-'}</span></td>
+        <td>${p.title||''}</td>
+        <td class="kw">${p.keyword||''}</td>
+        <td>${p.topic||'-'}${p.worktype ? `<br><span class="kw">${p.worktype}</span>` : ''}</td>
+        <td>${p.link ? `<a class="link" href="${p.link}" target="_blank">열기 ↗</a>` : '-'}</td>
+      </tr>
+    `).join('');
+  }
+}
+
+/* ============================================================
+   6) 설정: 작성자/브랜드 추가·삭제
+   ============================================================ */
+function removeAuthor(name){ SETTINGS.authors = SETTINGS.authors.filter(a=>a!==name); renderSettingsModal(); }
+function removeBrand(name){
+  SETTINGS.brands = SETTINGS.brands.filter(b=>b!==name);
+  if(SETTINGS.brandColors) delete SETTINGS.brandColors[name];
+  renderSettingsModal();
+}
+
+document.getElementById('addAuthorBtn').addEventListener('click', ()=>{
+  const input = document.getElementById('newAuthorInput');
+  const v = input.value.trim();
+  if(v && !SETTINGS.authors.includes(v)){ SETTINGS.authors.push(v); input.value=''; renderSettingsModal(); }
+});
+document.getElementById('addBrandBtn').addEventListener('click', ()=>{
+  const input = document.getElementById('newBrandInput');
+  const v = input.value.trim();
+  if(v && !SETTINGS.brands.includes(v)){ SETTINGS.brands.push(v); input.value=''; renderSettingsModal(); }
+});
+
+document.getElementById('saveSettings').addEventListener('click', ()=>{
+  SETTINGS.weeklyTarget = Number(document.getElementById('weeklyTargetInput').value)||0;
+  SETTINGS.monthlyTarget = Number(document.getElementById('monthlyTargetInput').value)||0;
+  if(firebaseReady){
+    saveSettingsToDb();
+  } else {
+    showStatus('🧪 데모 모드: 설정이 이 브라우저 세션에만 임시 저장되었습니다.', 'warn');
+  }
+  renderFilterOptions();
+  renderAll();
+  document.getElementById('settingsModalBg').classList.remove('show');
+});
+document.getElementById('closeSettings').addEventListener('click', ()=> document.getElementById('settingsModalBg').classList.remove('show'));
+document.getElementById('openSettings').addEventListener('click', ()=>{ renderSettingsModal(); document.getElementById('settingsModalBg').classList.add('show'); });
+
+/* ============================================================
+   7) 포스팅 등록/삭제
+   ============================================================ */
+document.getElementById('openAddPost').addEventListener('click', ()=>{
+  editingId = null;
+  document.getElementById('postModalTitle').textContent = '포스팅 등록';
+  ['pTitle','pKeyword','pLink','pWorktype'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('pDate').value = todayStr();
+  document.getElementById('postModalBg').classList.add('show');
+});
+document.getElementById('cancelPost').addEventListener('click', ()=> document.getElementById('postModalBg').classList.remove('show'));
+
+document.getElementById('savePost').addEventListener('click', ()=>{
+  const title = document.getElementById('pTitle').value.trim();
+  const author = document.getElementById('pAuthor').value;
+  const brand = document.getElementById('pBrand').value;
+  const topic = document.getElementById('pTopic').value.trim();
+  const date = document.getElementById('pDate').value;
+  const keyword = document.getElementById('pKeyword').value.trim();
+  const worktype = document.getElementById('pWorktype').value.trim();
+  const link = document.getElementById('pLink').value.trim();
+
+  if(!title || !author || !brand || !date){
+    showStatus('제목, 작성자, 브랜드, 발행일은 필수 입력입니다.', 'err');
+    return;
+  }
+  const data = { title, author, brand, topic, publishedAt:date, keyword, worktype, link };
+
+  if(!firebaseReady){
+    data.id = 'local-' + Date.now();
+    POSTS.unshift(data);
+    renderAll();
+    document.getElementById('postModalBg').classList.remove('show');
+    showStatus('🧪 데모 모드: 이 브라우저 세션에만 임시 저장되었습니다. (새로고침하면 사라집니다)', 'warn');
+    return;
+  }
+  db.collection('posts').add(data)
+    .then(()=>{
+      document.getElementById('postModalBg').classList.remove('show');
+      showStatus('포스팅이 등록되었습니다.', 'ok');
+      setTimeout(()=>document.getElementById('statusBanner').classList.remove('show'),2000);
+    })
+    .catch(err=>showStatus('저장 오류: '+err.message,'err'));
+});
+
+function deletePost(id){
+  if(!confirm('이 포스팅을 삭제할까요?')) return;
+  if(!firebaseReady){
+    POSTS = POSTS.filter(p=>p.id!==id);
+    renderAll();
+    return;
+  }
+  db.collection('posts').doc(id).delete()
+    .catch(err=>showStatus('삭제 오류: '+err.message,'err'));
+}
+
+/* ============================================================
+   8) 필터 / 세그먼트 컨트롤 이벤트
+   ============================================================ */
+['fAuthor','fBrand','fStart','fEnd','fKeyword'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', renderTable);
+});
+document.getElementById('resetFilter').addEventListener('click', ()=>{
+  ['fAuthor','fBrand','fStart','fEnd','fKeyword'].forEach(id=>document.getElementById(id).value='');
+  renderTable();
+});
+
+document.querySelectorAll('[data-seg="brandPeriod"] button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('[data-seg="brandPeriod"] button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    brandPeriod = btn.dataset.val;
+    renderBrandChart();
+  });
+});
+
+document.querySelectorAll('#mainTabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('#mainTabs button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    const view = btn.dataset.view;
+    document.getElementById('viewDashboard').style.display = view==='dashboard' ? '' : 'none';
+    document.getElementById('viewAuthor').style.display = view==='author' ? '' : 'none';
+    if(view==='author') renderAuthorView();
+  });
+});
+
+document.querySelectorAll('[data-seg="authorSharedPeriod"] button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('[data-seg="authorSharedPeriod"] button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    authorSharedPeriod = btn.dataset.val;
+    renderAuthorView();
+  });
+});
+document.getElementById('authorSharedDateStart').addEventListener('change', renderAuthorView);
+document.getElementById('authorSharedDateEnd').addEventListener('change', renderAuthorView);
+
+document.getElementById('authorSelect').addEventListener('change', renderAuthorView);
+
+document.getElementById('authorSharedBrandFilter').addEventListener('change', renderAuthorView);
+
+/* ============================================================
+   9) 초기 실행
+   ============================================================ */
+loadSettings();
+loadPosts();
+</script>
+</body>
+</html>
