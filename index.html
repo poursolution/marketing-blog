@@ -116,6 +116,8 @@
   .chip-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
   .chip{background:var(--accent-light);border:none;border-radius:999px;padding:5px 10px 5px 14px;font-size:12px;font-weight:700;color:var(--accent-dark);display:flex;align-items:center;gap:6px;}
   .chip button{border:none;background:none;color:var(--accent-dark);cursor:pointer;font-size:13px;line-height:1;font-weight:800;}
+  .chip-suggest{background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;}
+  .chip-suggest:hover{background:var(--accent-light);color:var(--accent-dark);border-color:var(--accent);}
   .status-banner{padding:11px 16px;border-radius:14px;font-size:12.5px;margin-bottom:14px;display:none;font-weight:600;}
   .status-banner.show{display:block;}
   .status-banner.warn{background:var(--warning-light);color:#B36B00;}
@@ -319,7 +321,7 @@
     <div class="row2">
       <div class="field">
         <label>주제</label>
-        <input type="text" id="pTopic" placeholder="예: 시공사례, 제품소개">
+        <select id="pTopic"><option value="">선택 안 함</option></select>
       </div>
       <div class="field">
         <label>발행일</label>
@@ -329,6 +331,7 @@
     <div class="field">
       <label>공종 (시공사례인 경우, 콤마로 구분)</label>
       <input type="text" id="pWorktype" placeholder="예: 방수공사, 타일공사">
+      <div class="chip-list" id="pWorktypeSuggest" style="margin-top:6px;"></div>
     </div>
     <div class="field">
       <label>키워드 (콤마로 구분)</label>
@@ -367,6 +370,24 @@
         <button class="btn small" id="addBrandBtn">추가</button>
       </div>
       <div class="chip-list" id="brandChips"></div>
+    </div>
+
+    <div class="field">
+      <label>주제 목록</label>
+      <div style="display:flex;gap:6px;">
+        <input type="text" id="newTopicInput" placeholder="주제 입력 후 추가 (예: 시공사례)">
+        <button class="btn small" id="addTopicBtn">추가</button>
+      </div>
+      <div class="chip-list" id="topicChips"></div>
+    </div>
+
+    <div class="field">
+      <label>공종 목록</label>
+      <div style="display:flex;gap:6px;">
+        <input type="text" id="newWorktypeInput" placeholder="공종 입력 후 추가 (예: 방수공사)">
+        <button class="btn small" id="addWorktypeBtn">추가</button>
+      </div>
+      <div class="chip-list" id="worktypeChips"></div>
     </div>
 
     <div class="row2">
@@ -434,7 +455,7 @@ try{
 /* ============================================================
    2) 상태
    ============================================================ */
-let SETTINGS = { authors: [], brands: [], brandColors: {}, weeklyTarget: 3, monthlyTarget: 12, jandiWebhookUrl: '' };
+let SETTINGS = { authors: [], brands: [], brandColors: {}, topics: [], worktypes: [], weeklyTarget: 3, monthlyTarget: 12, jandiWebhookUrl: '' };
 let POSTS = [];
 let editingId = null;
 let brandChart = null;
@@ -459,6 +480,8 @@ const DEMO_SETTINGS = {
   authors: ['작성자1','작성자2','작성자3','작성자4','작성자5'],
   brands: ['브랜드1','브랜드2','브랜드3','브랜드4','브랜드5'],
   brandColors: {},
+  topics: ['시공사례','제품소개','가이드','트렌드','후기','브랜딩'],
+  worktypes: ['방수공사','타일공사','도장공사','철거공사','미장공사'],
   weeklyTarget: 2,
   monthlyTarget: 8
 };
@@ -489,7 +512,7 @@ function loadSettings(){
   }
   db.collection('config').doc('settings').onSnapshot(doc=>{
     if(doc.exists){
-      SETTINGS = Object.assign({authors:[],brands:[],brandColors:{},weeklyTarget:3,monthlyTarget:12,jandiWebhookUrl:''}, doc.data());
+      SETTINGS = Object.assign({authors:[],brands:[],brandColors:{},topics:[],worktypes:[],weeklyTarget:3,monthlyTarget:12,jandiWebhookUrl:''}, doc.data());
     }
     renderFilterOptions();
     renderSettingsModal();
@@ -574,6 +597,27 @@ function renderFilterOptions(){
     apbf.insertAdjacentHTML('beforeend', `<option value="${b}">${b}</option>`);
   });
   if(SETTINGS.brands.includes(prevApbf)) apbf.value = prevApbf;
+
+  const pt = document.getElementById('pTopic');
+  const prevTopic = pt.value;
+  pt.innerHTML = '<option value="">선택 안 함</option>';
+  SETTINGS.topics.forEach(t=>{
+    pt.insertAdjacentHTML('beforeend', `<option value="${t}">${t}</option>`);
+  });
+  if(SETTINGS.topics.includes(prevTopic)) pt.value = prevTopic;
+}
+
+function renderWorktypeSuggestChips(){
+  const box = document.getElementById('pWorktypeSuggest');
+  box.innerHTML = SETTINGS.worktypes.map(w=>
+    `<span class="chip-suggest" onclick="addWorktypeToInput('${w}')">+ ${w}</span>`).join('');
+}
+
+function addWorktypeToInput(w){
+  const input = document.getElementById('pWorktype');
+  const current = input.value.split(',').map(s=>s.trim()).filter(Boolean);
+  if(!current.includes(w)) current.push(w);
+  input.value = current.join(', ');
 }
 
 function getFilteredPosts(){
@@ -703,6 +747,10 @@ function renderSettingsModal(){
       <input type="color" value="${getBrandColor(b)}" oninput="setBrandColor('${b}', this.value)" style="width:16px;height:16px;padding:0;border:none;border-radius:50%;cursor:pointer;background:none;">
       ${b}<button onclick="removeBrand('${b}')">×</button>
     </span>`).join('') || '<span style="color:var(--muted);font-size:12px;">등록된 브랜드 없음</span>';
+  document.getElementById('topicChips').innerHTML = SETTINGS.topics.map(t=>
+    `<span class="chip">${t}<button onclick="removeTopic('${t}')">×</button></span>`).join('') || '<span style="color:var(--muted);font-size:12px;">등록된 주제 없음</span>';
+  document.getElementById('worktypeChips').innerHTML = SETTINGS.worktypes.map(w=>
+    `<span class="chip">${w}<button onclick="removeWorktype('${w}')">×</button></span>`).join('') || '<span style="color:var(--muted);font-size:12px;">등록된 공종 없음</span>';
 }
 
 function setBrandColor(brand, color){
@@ -927,6 +975,8 @@ function removeBrand(name){
   if(SETTINGS.brandColors) delete SETTINGS.brandColors[name];
   renderSettingsModal();
 }
+function removeTopic(name){ SETTINGS.topics = SETTINGS.topics.filter(t=>t!==name); renderSettingsModal(); }
+function removeWorktype(name){ SETTINGS.worktypes = SETTINGS.worktypes.filter(w=>w!==name); renderSettingsModal(); }
 
 document.getElementById('addAuthorBtn').addEventListener('click', ()=>{
   const input = document.getElementById('newAuthorInput');
@@ -937,6 +987,16 @@ document.getElementById('addBrandBtn').addEventListener('click', ()=>{
   const input = document.getElementById('newBrandInput');
   const v = input.value.trim();
   if(v && !SETTINGS.brands.includes(v)){ SETTINGS.brands.push(v); input.value=''; renderSettingsModal(); }
+});
+document.getElementById('addTopicBtn').addEventListener('click', ()=>{
+  const input = document.getElementById('newTopicInput');
+  const v = input.value.trim();
+  if(v && !SETTINGS.topics.includes(v)){ SETTINGS.topics.push(v); input.value=''; renderSettingsModal(); }
+});
+document.getElementById('addWorktypeBtn').addEventListener('click', ()=>{
+  const input = document.getElementById('newWorktypeInput');
+  const v = input.value.trim();
+  if(v && !SETTINGS.worktypes.includes(v)){ SETTINGS.worktypes.push(v); input.value=''; renderSettingsModal(); }
 });
 
 document.getElementById('saveSettings').addEventListener('click', ()=>{
@@ -962,7 +1022,9 @@ document.getElementById('openAddPost').addEventListener('click', ()=>{
   editingId = null;
   document.getElementById('postModalTitle').textContent = '포스팅 등록';
   ['pTitle','pKeyword','pLink','pWorktype'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('pTopic').value = '';
   document.getElementById('pDate').value = todayStr();
+  renderWorktypeSuggestChips();
   document.getElementById('postModalBg').classList.add('show');
 });
 document.getElementById('cancelPost').addEventListener('click', ()=> document.getElementById('postModalBg').classList.remove('show'));
@@ -975,11 +1037,16 @@ function editPost(id){
   document.getElementById('pTitle').value = p.title || '';
   document.getElementById('pAuthor').value = p.author || '';
   document.getElementById('pBrand').value = p.brand || '';
-  document.getElementById('pTopic').value = p.topic || '';
+  const topicSel = document.getElementById('pTopic');
+  if(p.topic && !SETTINGS.topics.includes(p.topic)){
+    topicSel.insertAdjacentHTML('beforeend', `<option value="${p.topic}">${p.topic} (목록에 없음)</option>`);
+  }
+  topicSel.value = p.topic || '';
   document.getElementById('pDate').value = p.publishedAt || '';
   document.getElementById('pKeyword').value = p.keyword || '';
   document.getElementById('pWorktype').value = p.worktype || '';
   document.getElementById('pLink').value = p.link || '';
+  renderWorktypeSuggestChips();
   document.getElementById('postModalBg').classList.add('show');
 }
 
