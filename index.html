@@ -129,6 +129,7 @@
 </style>
 </head>
 <body>
+
 <div class="wrap">
 
   <header>
@@ -277,11 +278,11 @@
       <table class="log">
         <thead>
           <tr>
-            <th style="width:90px;">날짜</th>
-            <th style="width:90px;">브랜드</th>
-            <th>제목</th>
-            <th style="width:160px;">키워드</th>
-            <th style="width:100px;">주제</th>
+            <th style="width:90px;cursor:pointer;" id="thAuthorDate" onclick="setAuthorSort('publishedAt')">날짜</th>
+            <th style="width:90px;cursor:pointer;" id="thAuthorBrand" onclick="setAuthorSort('brand')">브랜드</th>
+            <th style="cursor:pointer;" id="thAuthorTitle" onclick="setAuthorSort('title')">제목</th>
+            <th style="width:160px;cursor:pointer;" id="thAuthorKeyword" onclick="setAuthorSort('keyword')">키워드</th>
+            <th style="width:100px;cursor:pointer;" id="thAuthorTopic" onclick="setAuthorSort('topic')">주제</th>
             <th style="width:70px;">링크</th>
           </tr>
         </thead>
@@ -391,12 +392,12 @@
    나오는 config 값을 아래에 붙여넣으세요.
    ============================================================ */
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyBM9FaPaa87dHFi6NY9N1yR99Vdh42c8jM",
+  authDomain: "marketing-blog-2de5e.firebaseapp.com",
+  projectId: "marketing-blog-2de5e",
+  storageBucket: "marketing-blog-2de5e.firebasestorage.app",
+  messagingSenderId: "337274824572",
+  appId: "1:337274824572:web:da95a6ba60288f13a726f9"
 };
 
 let db = null;
@@ -432,6 +433,8 @@ let brandChart = null;
 let brandPeriod = 'month';
 let authorBrandChartInst = null;
 let authorSharedPeriod = 'week';
+let authorSortField = 'publishedAt';
+let authorSortDir = 'desc';
 
 const DEFAULT_BRAND_PALETTE = ['#03C75A','#3B82F6','#F59E0B','#EF4444','#8B5CF6','#14B8A6','#EC4899','#6366F1'];
 
@@ -811,6 +814,27 @@ function renderAll(){
   renderAuthorView();
 }
 
+function setAuthorSort(field){
+  if(authorSortField === field){
+    authorSortDir = authorSortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    authorSortField = field;
+    authorSortDir = field === 'publishedAt' ? 'desc' : 'asc';
+  }
+  renderAuthorView();
+}
+
+function updateAuthorSortHeaders(){
+  const map = {publishedAt:['thAuthorDate','날짜'], brand:['thAuthorBrand','브랜드'], title:['thAuthorTitle','제목'], keyword:['thAuthorKeyword','키워드'], topic:['thAuthorTopic','주제']};
+  Object.keys(map).forEach(field=>{
+    const [id,label] = map[field];
+    const el = document.getElementById(id);
+    if(!el) return;
+    const arrow = authorSortField===field ? (authorSortDir==='asc' ? ' ▲' : ' ▼') : '';
+    el.textContent = label + arrow;
+  });
+}
+
 function renderAuthorView(){
   const asel = document.getElementById('authorSelect');
   if(SETTINGS.authors.length===0){
@@ -858,7 +882,14 @@ function renderAuthorView(){
   renderAuthorKeywordList(sharedFilteredPosts);
 
   const postRows = document.getElementById('authorPostRows');
-  const sortedPosts = [...sharedFilteredPosts].sort((a,b)=> (b.publishedAt||'').localeCompare(a.publishedAt||''));
+  updateAuthorSortHeaders();
+  const sortedPosts = [...sharedFilteredPosts].sort((a,b)=>{
+    let av = (a[authorSortField] ?? '').toString().toLowerCase();
+    let bv = (b[authorSortField] ?? '').toString().toLowerCase();
+    if(av < bv) return authorSortDir==='asc' ? -1 : 1;
+    if(av > bv) return authorSortDir==='asc' ? 1 : -1;
+    return 0;
+  });
   if(sortedPosts.length===0){
     postRows.innerHTML = '';
     document.getElementById('authorEmptyState').style.display = 'block';
