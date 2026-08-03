@@ -96,6 +96,8 @@
   a.link:hover{background:var(--accent-dark);}
   .del-btn{color:var(--muted);background:var(--surface);border:none;cursor:pointer;font-size:11.5px;font-weight:700;padding:6px 14px;border-radius:999px;white-space:nowrap;}
   .del-btn:hover{color:var(--danger);background:var(--danger-light);}
+  .edit-btn{color:var(--muted);background:var(--surface);border:none;cursor:pointer;font-size:11.5px;font-weight:700;padding:6px 14px;border-radius:999px;white-space:nowrap;margin-right:4px;}
+  .edit-btn:hover{color:var(--accent-dark);background:var(--accent-light);}
   .empty{text-align:center;padding:40px;color:var(--muted);font-weight:500;}
 
   .modal-bg{display:none;position:fixed;inset:0;background:rgba(20,22,28,.4);z-index:50;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto;}
@@ -213,7 +215,7 @@
         <th style="width:160px;">키워드</th>
         <th style="width:100px;">주제</th>
         <th style="width:70px;">링크</th>
-        <th style="width:50px;"></th>
+        <th style="width:110px;"></th>
       </tr>
     </thead>
     <tbody id="postRows"></tbody>
@@ -284,6 +286,7 @@
             <th style="width:160px;cursor:pointer;" id="thAuthorKeyword" onclick="setAuthorSort('keyword')">키워드</th>
             <th style="width:100px;cursor:pointer;" id="thAuthorTopic" onclick="setAuthorSort('topic')">주제</th>
             <th style="width:70px;">링크</th>
+            <th style="width:110px;"></th>
           </tr>
         </thead>
         <tbody id="authorPostRows"></tbody>
@@ -377,6 +380,11 @@
       </div>
     </div>
 
+    <div class="field">
+      <label>잔디 웹훅 URL (선택, 비워두면 자동 공유 안 함)</label>
+      <input type="text" id="jandiWebhookInput" placeholder="https://wh.jandi.com/connect-api/webhook/...">
+    </div>
+
     <div class="modal-actions">
       <button class="btn" id="closeSettings">닫기</button>
       <button class="btn primary" id="saveSettings">저장</button>
@@ -426,7 +434,7 @@ try{
 /* ============================================================
    2) 상태
    ============================================================ */
-let SETTINGS = { authors: [], brands: [], brandColors: {}, weeklyTarget: 3, monthlyTarget: 12 };
+let SETTINGS = { authors: [], brands: [], brandColors: {}, weeklyTarget: 3, monthlyTarget: 12, jandiWebhookUrl: '' };
 let POSTS = [];
 let editingId = null;
 let brandChart = null;
@@ -481,7 +489,7 @@ function loadSettings(){
   }
   db.collection('config').doc('settings').onSnapshot(doc=>{
     if(doc.exists){
-      SETTINGS = Object.assign({authors:[],brands:[],brandColors:{},weeklyTarget:3,monthlyTarget:12}, doc.data());
+      SETTINGS = Object.assign({authors:[],brands:[],brandColors:{},weeklyTarget:3,monthlyTarget:12,jandiWebhookUrl:''}, doc.data());
     }
     renderFilterOptions();
     renderSettingsModal();
@@ -606,7 +614,7 @@ function renderTable(){
       <td class="kw">${p.keyword||''}</td>
       <td>${p.topic||'-'}${p.worktype ? `<br><span class="kw">${p.worktype}</span>` : ''}</td>
       <td>${p.link ? `<a class="link" href="${p.link}" target="_blank">열기 ↗</a>` : '-'}</td>
-      <td><button class="del-btn" onclick="deletePost('${p.id}')">삭제</button></td>
+      <td><button class="edit-btn" onclick="editPost('${p.id}')">수정</button><button class="del-btn" onclick="deletePost('${p.id}')">삭제</button></td>
     </tr>
   `).join('');
 }
@@ -687,6 +695,7 @@ function renderBrandChart(){
 function renderSettingsModal(){
   document.getElementById('weeklyTargetInput').value = SETTINGS.weeklyTarget;
   document.getElementById('monthlyTargetInput').value = SETTINGS.monthlyTarget;
+  document.getElementById('jandiWebhookInput').value = SETTINGS.jandiWebhookUrl || '';
   document.getElementById('authorChips').innerHTML = SETTINGS.authors.map(a=>
     `<span class="chip">${a}<button onclick="removeAuthor('${a}')">×</button></span>`).join('') || '<span style="color:var(--muted);font-size:12px;">등록된 작성자 없음</span>';
   document.getElementById('brandChips').innerHTML = SETTINGS.brands.map(b=>
@@ -903,6 +912,7 @@ function renderAuthorView(){
         <td class="kw">${p.keyword||''}</td>
         <td>${p.topic||'-'}${p.worktype ? `<br><span class="kw">${p.worktype}</span>` : ''}</td>
         <td>${p.link ? `<a class="link" href="${p.link}" target="_blank">열기 ↗</a>` : '-'}</td>
+        <td><button class="edit-btn" onclick="editPost('${p.id}')">수정</button><button class="del-btn" onclick="deletePost('${p.id}')">삭제</button></td>
       </tr>
     `).join('');
   }
@@ -932,6 +942,7 @@ document.getElementById('addBrandBtn').addEventListener('click', ()=>{
 document.getElementById('saveSettings').addEventListener('click', ()=>{
   SETTINGS.weeklyTarget = Number(document.getElementById('weeklyTargetInput').value)||0;
   SETTINGS.monthlyTarget = Number(document.getElementById('monthlyTargetInput').value)||0;
+  SETTINGS.jandiWebhookUrl = document.getElementById('jandiWebhookInput').value.trim();
   if(firebaseReady){
     saveSettingsToDb();
   } else {
@@ -956,6 +967,38 @@ document.getElementById('openAddPost').addEventListener('click', ()=>{
 });
 document.getElementById('cancelPost').addEventListener('click', ()=> document.getElementById('postModalBg').classList.remove('show'));
 
+function editPost(id){
+  const p = POSTS.find(x=>x.id===id);
+  if(!p) return;
+  editingId = id;
+  document.getElementById('postModalTitle').textContent = '포스팅 수정';
+  document.getElementById('pTitle').value = p.title || '';
+  document.getElementById('pAuthor').value = p.author || '';
+  document.getElementById('pBrand').value = p.brand || '';
+  document.getElementById('pTopic').value = p.topic || '';
+  document.getElementById('pDate').value = p.publishedAt || '';
+  document.getElementById('pKeyword').value = p.keyword || '';
+  document.getElementById('pWorktype').value = p.worktype || '';
+  document.getElementById('pLink').value = p.link || '';
+  document.getElementById('postModalBg').classList.add('show');
+}
+
+function sendToJandi(data){
+  const url = SETTINGS.jandiWebhookUrl;
+  if(!url) return;
+  const msg = `📝 새 포스팅 등록\n${data.title}\n브랜드: ${data.brand} | 작성자: ${data.author}${data.keyword ? '\n키워드: '+data.keyword : ''}${data.link ? '\n'+data.link : ''}`;
+  fetch(url, {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/vnd.tosslab.jandi-v2+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ body: msg })
+  }).catch(err=>{
+    showStatus('⚠ 잔디 공유 실패 (브라우저 보안 정책 때문일 수 있음): '+err.message, 'warn');
+  });
+}
+
 document.getElementById('savePost').addEventListener('click', ()=>{
   const title = document.getElementById('pTitle').value.trim();
   const author = document.getElementById('pAuthor').value;
@@ -973,17 +1016,29 @@ document.getElementById('savePost').addEventListener('click', ()=>{
   const data = { title, author, brand, topic, publishedAt:date, keyword, worktype, link };
 
   if(!firebaseReady){
-    data.id = 'local-' + Date.now();
-    POSTS.unshift(data);
+    if(editingId){
+      const idx = POSTS.findIndex(p=>p.id===editingId);
+      if(idx>-1) POSTS[idx] = Object.assign({}, POSTS[idx], data);
+      showStatus('🧪 데모 모드: 수정 내용이 이 브라우저 세션에만 임시 반영되었습니다.', 'warn');
+    } else {
+      data.id = 'local-' + Date.now();
+      POSTS.unshift(data);
+      showStatus('🧪 데모 모드: 이 브라우저 세션에만 임시 저장되었습니다. (새로고침하면 사라집니다)', 'warn');
+    }
     renderAll();
     document.getElementById('postModalBg').classList.remove('show');
-    showStatus('🧪 데모 모드: 이 브라우저 세션에만 임시 저장되었습니다. (새로고침하면 사라집니다)', 'warn');
     return;
   }
-  db.collection('posts').add(data)
+
+  const savePromise = editingId
+    ? db.collection('posts').doc(editingId).update(data)
+    : db.collection('posts').add(data);
+
+  savePromise
     .then(()=>{
       document.getElementById('postModalBg').classList.remove('show');
-      showStatus('포스팅이 등록되었습니다.', 'ok');
+      showStatus(editingId ? '포스팅이 수정되었습니다.' : '포스팅이 등록되었습니다.', 'ok');
+      if(!editingId) sendToJandi(data);
       setTimeout(()=>document.getElementById('statusBanner').classList.remove('show'),2000);
     })
     .catch(err=>showStatus('저장 오류: '+err.message,'err'));
